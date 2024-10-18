@@ -125,7 +125,7 @@ func GetLogicalTotal(drive string) (int64, error) {
 
 	data, err := getAllPartitionInfo(disk)
 	if err != nil {
-		fmt.Errorf("Failed to get partition info: %v\n", err)
+		fmt.Printf("Failed to get partition info: %v\n", err)
 		return 0, err
 	}
 	header := (*DRIVE_LAYOUT_INFORMATION_EX_HEADER)(unsafe.Pointer(&data[0]))

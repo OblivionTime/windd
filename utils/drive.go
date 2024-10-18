@@ -18,6 +18,7 @@ type PartitionStyle uint32
 const (
 	IOCTL_DISK_GET_DRIVE_LAYOUT_EX = 0x00070050
 	IOCTL_DISK_GET_DRIVE_GEOMETRY  = 0x00070000 // 控制代码，用于获取磁盘几何信息
+	IOCTL_DISK_GET_LENGTH_INFO     = 0x0007405c
 
 	FILE_DEVICE_MASS_STORAGE        uint32 = 0x0000002d
 	IOCTL_STORAGE_BASE              uint32 = FILE_DEVICE_MASS_STORAGE
@@ -84,31 +85,29 @@ func GetDiskTotal(diskName string) (int64, error) {
 	defer syscall.CloseHandle(handle)
 
 	// 准备用于获取磁盘几何信息的结构体
-	var diskGeometry DiskGeometry
+	dglibuf := make([]byte, 1024)
 	var bytesReturned uint32
-
 	// 调用 DeviceIoControl 函数获取磁盘几何信息
 	err = syscall.DeviceIoControl(
 		handle,
-		IOCTL_DISK_GET_DRIVE_GEOMETRY,
+		IOCTL_DISK_GET_LENGTH_INFO,
 		nil,
 		0,
-		(*byte)(unsafe.Pointer(&diskGeometry)),
-		uint32(unsafe.Sizeof(diskGeometry)),
+		&dglibuf[0],
+		uint32(unsafe.Sizeof(dglibuf)),
 		&bytesReturned,
 		nil,
 	)
 	if err != nil {
 		return 0, err
 	}
+	type getLengthInfo struct {
+		Length int64
+	}
 
-	// 计算磁盘总量
-	diskSize := int64(diskGeometry.Cylinders) *
-		int64(diskGeometry.TracksPerCylinder) *
-		int64(diskGeometry.SectorsPerTrack) *
-		int64(diskGeometry.BytesPerSector)
+	gli := (*getLengthInfo)(unsafe.Pointer(&dglibuf[0]))
 
-	return diskSize, nil
+	return gli.Length, nil
 }
 
 // 获取Bitlocker对应的磁盘及其盘符对应的偏移量

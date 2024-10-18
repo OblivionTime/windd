@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/kingpin"
 	"github.com/gosuri/uiprogress"
@@ -78,6 +79,7 @@ func main() {
 	sourceFile.Seek(offset+Skip, io.SeekStart)
 	// 创建一个字节切片来存储前1024个字节
 	buffer := make([]byte, 1024*1024*BS)
+
 	var destFile *os.File
 	if utils.IsExist(savePath) {
 		destFile, err = os.Open(savePath)
@@ -105,37 +107,49 @@ func main() {
 			return fmt.Sprintf("%s/%s  %v%%", utils.FormatFileSize(uint64(SaveedSize)), utils.FormatFileSize(uint64(driveTotal)), int(SaveedSize*100/driveTotal))
 		})
 	}
-
+	var WirteSize int
 	for {
 		// 从源文件读取数据到缓冲区
 		bytesRead, err := sourceFile.Read(buffer)
 		if err != nil {
+			fmt.Println(err, bytesRead, driveTotal, SaveedSize)
 			if err == io.EOF {
 				SaveedSize += int64(bytesRead)
-				break // 文件读取完毕，退出循环
 			}
-
-			fmt.Printf("磁盘读取失败: %v\n", err)
-			os.Exit(1)
+			break
+			// if strings.Contains(err.Error(), "The drive cannot find the sector requested") || strings.Contains(err.Error(), "找不到请求的扇区") || driveTotal <= SaveedSize {
+			// 	break
+			// }
+			// fmt.Printf("出现错误: %v\n", err)
+			// os.Exit(1)
 		}
 		if offset != 0 && (SaveedSize+int64(bytesRead)) >= driveTotal {
 			// 将缓冲区的数据写入到目标文件
 			_, err = destFile.Write(buffer[:driveTotal-SaveedSize])
 			if err != nil {
-				fmt.Printf("磁盘读取失败: %v\n", err)
+				fmt.Printf("磁盘写入失败: %v\n", err)
 				os.Exit(1)
 			}
 			break
 		} else {
+
+			if driveTotal < SaveedSize+int64(bytesRead) {
+				WirteSize = int(driveTotal - SaveedSize)
+			} else {
+				WirteSize = bytesRead
+			}
 			// 将缓冲区的数据写入到目标文件
-			_, err = destFile.Write(buffer[:bytesRead])
+			_, err = destFile.Write(buffer[:WirteSize])
 			if err != nil {
-				fmt.Printf("磁盘读取失败: %v\n", err)
+				fmt.Printf("磁盘写入失败: %v\n", err)
 				os.Exit(1)
 			}
-			SaveedSize += int64(bytesRead)
+			SaveedSize += int64(WirteSize)
 		}
-
+		time.Sleep(10 * time.Millisecond)
+		if SaveedSize >= driveTotal {
+			break
+		}
 		if progress {
 			bar.Set(int(SaveedSize * 100 / driveTotal))
 		}
